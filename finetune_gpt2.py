@@ -49,6 +49,9 @@ def fine_tune(model_name, train_file, epochs, batch_size, learning_rate, save_pa
 
             print(f"Epoch: {epoch}, Loss: {loss.item()}")
 
+            # Clearing the cache after each batch
+            torch.cuda.empty_cache()
+
     # Save the model and tokenizer
     model.save_pretrained(save_path)
     tokenizer.save_pretrained(save_path)
