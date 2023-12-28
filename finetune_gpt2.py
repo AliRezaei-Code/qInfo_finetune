@@ -2,6 +2,8 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 from torch.optim import AdamW
 from transformers import GPT2LMHeadModel, GPT2Tokenizer, get_linear_schedule_with_warmup
+from tqdm import tqdm
+from datetime import datetime
 
 class CustomDataset(Dataset):
     def __init__(self, tokenizer, filename, block_size=512):
@@ -37,7 +39,8 @@ def fine_tune(model_name, train_file, epochs, batch_size, learning_rate, save_pa
 
     model.train()
     for epoch in range(epochs):
-        for batch in data_loader:
+        progress_bar = tqdm(data_loader, desc=f"Epoch {epoch+1}/{epochs}")
+        for batch in progress_bar:
             inputs = batch.to(device)  # Move the batch to the GPU
             outputs = model(inputs, labels=inputs)
             loss = outputs.loss
@@ -47,7 +50,11 @@ def fine_tune(model_name, train_file, epochs, batch_size, learning_rate, save_pa
             scheduler.step()
             optimizer.zero_grad()
 
-            print(f"Epoch: {epoch}, Loss: {loss.item()}")
+            # Get the current timestamp
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            # Update the progress bar with the current loss and timestamp
+            progress_bar.set_postfix(loss=loss.item(), timestamp=timestamp)
 
             # Clearing the cache after each batch
             torch.cuda.empty_cache()
@@ -61,6 +68,6 @@ def fine_tune(model_name, train_file, epochs, batch_size, learning_rate, save_pa
 # Training:
 
 save_path = "/home/ali0rez/Documents/gpt2_model_output"
-model = fine_tune("gpt2-medium", "/home/ali0rez/Documents/data.txt", epochs=40, batch_size=20, learning_rate=5e-5, save_path=save_path)
+model = fine_tune("gpt2-medium", "/home/ali0rez/Documents/data.txt", epochs=1, batch_size=6, learning_rate=1e-5, save_path=save_path)
 
 
