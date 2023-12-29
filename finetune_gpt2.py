@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import DataLoader, Dataset
 from torch.optim import AdamW
-from transformers import GPT2LMHeadModel, GPT2Tokenizer, get_linear_schedule_with_warmup
+from transformers import AutoModelForCausalLM, AutoTokenizer, get_linear_schedule_with_warmup
 from tqdm import tqdm
 from datetime import datetime
 
@@ -22,13 +22,13 @@ def fine_tune(model_name, train_file, epochs, batch_size, learning_rate, save_pa
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    tokenizer = GPT2Tokenizer.from_pretrained(model_name)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+    # Use the AutoTokenizer and AutoModelForCausalLM for Mixtral
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForCausalLM.from_pretrained(model_name)
 
-    model = GPT2LMHeadModel.from_pretrained(model_name)
-    model.to(device)  # Move the model to the GPU
-    
+    model.to(device)
+    model = torch.nn.DataParallel(model, device_ids=[0, 1, 2])  # Utilize multiple GPUs
+
     # Load dataset
     dataset = CustomDataset(tokenizer, train_file)
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
@@ -41,7 +41,7 @@ def fine_tune(model_name, train_file, epochs, batch_size, learning_rate, save_pa
     for epoch in range(epochs):
         progress_bar = tqdm(data_loader, desc=f"Epoch {epoch+1}/{epochs}")
         for batch in progress_bar:
-            inputs = batch.to(device)  # Move the batch to the GPU
+            inputs = batch.to(device)
             outputs = model(inputs, labels=inputs)
             loss = outputs.loss
 
@@ -50,24 +50,19 @@ def fine_tune(model_name, train_file, epochs, batch_size, learning_rate, save_pa
             scheduler.step()
             optimizer.zero_grad()
 
-            # Get the current timestamp
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-            # Update the progress bar with the current loss and timestamp
             progress_bar.set_postfix(loss=loss.item(), timestamp=timestamp)
 
-            # Clearing the cache after each batch
             torch.cuda.empty_cache()
 
     # Save the model and tokenizer
-    model.save_pretrained(save_path)
+    model.module.save_pretrained(save_path)
     tokenizer.save_pretrained(save_path)
 
     return model
 
 # Training:
-
-save_path = "/home/ali0rez/Documents/gpt2_model_output"
-model = fine_tune("gpt2-medium", "/home/ali0rez/Documents/data.txt", epochs=1, batch_size=6, learning_rate=1e-5, save_path=save_path)
-
-
+save_path = "/home/ali0rez/Documents/mixtral_model_output"
+model_name = "mistralai/Mixtral-8x7B-v0.1"
+train_file = "/home/ali0rez/Documents/data.txt"
+model = fine_tune(model_name, train_file, epochs=1, batch_size=20, learning_rate=1e-5, save_path=save_path)
